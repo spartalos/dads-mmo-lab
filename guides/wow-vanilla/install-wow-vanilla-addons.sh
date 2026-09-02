@@ -49,7 +49,7 @@ ADDONS=(
     ["ClassicSnowFall"]="https://github.com/Road-block/ClassicSnowFall/archive/refs/heads/master.zip"
     ["Mangosbot"]="https://github.com/celguar/mangosbot-addon/archive/refs/heads/master.zip"
     ["EngBags"]="https://github.com/davidonete/mangosbot-EngBags/archive/refs/heads/master.zip"
-    ["ShaguController"]="https://github.com/shagu/ShaguController/archive/refs/heads/master.zip"
+    ["ShaguController"]="https://github.com/spartalos/ShaguController/archive/refs/heads/master.zip"
 )
 
 ADDON_DESC=(
@@ -62,7 +62,7 @@ ADDON_DESC=(
     "ClassicSnowFall  — abilities fire on key press"
     "Mangosbot        — GUI panel to control Playerbots (/bot)"
     "EngBags          — view and manage bot inventory"
-    "ShaguController  — Steam Deck gamepad UI + keybinds"
+    "ShaguController  — Steam Deck gamepad UI (21 skills, interact, mount)"
 )
 
 printf "${GOLD}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}\n"
