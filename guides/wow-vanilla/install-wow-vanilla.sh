@@ -1587,8 +1587,12 @@ EOF
             "$SERVER_DIR/etc/aiplayerbot.conf"
         sed -i "s|^#\? *AiPlayerbot\.RandomBotMaxLevelChance .*|AiPlayerbot.RandomBotMaxLevelChance = 0.0|" \
             "$SERVER_DIR/etc/aiplayerbot.conf"
-        # Shorter LLM responses and reduce broadcast spam
-        sed -i "s|Keep responses under 100 characters\.|Keep responses under 40 characters. Be terse.|" \
+        # Shorter LLM responses: trim prompt, lower max_tokens, reduce bot-to-bot chat
+        sed -i 's|^AiPlayerbot\.LLMPrePrompt =.*|AiPlayerbot.LLMPrePrompt = You are <bot name>, a <bot role> (level <bot level> <bot gender> <bot race>) in World of Warcraft. You are in <bot subzone>, <bot zone>. <other name> (level <other level> <other class>) speaks to you <channel name>. Reply in 1 short sentence, max 20 words. Never monologue.|' \
+            "$SERVER_DIR/etc/aiplayerbot.conf"
+        sed -i 's|"max_tokens": [0-9]*|"max_tokens": 40|' \
+            "$SERVER_DIR/etc/aiplayerbot.conf"
+        sed -i "s|^AiPlayerbot\.LLMBotToBotChatChance =.*|AiPlayerbot.LLMBotToBotChatChance = 5|" \
             "$SERVER_DIR/etc/aiplayerbot.conf"
         sed -i '/^# AiPlayerbot\.BroadcastToSayGlobalChance/a AiPlayerbot.BroadcastToSayGlobalChance = 3000' \
             "$SERVER_DIR/etc/aiplayerbot.conf"
