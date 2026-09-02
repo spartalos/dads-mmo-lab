@@ -52,6 +52,12 @@ INSTALLER_VERSION="1.2.4"
 set -o pipefail
 
 # ─────────────────────────────────────────
+# LAN IP — so Steam Deck / other devices can connect
+# ─────────────────────────────────────────
+LAN_IP=$(ip -4 route get 1.1.1.1 2>/dev/null | awk '{for(i=1;i<=NF;i++) if($i=="src") print $(i+1)}')
+LAN_IP="${LAN_IP:-127.0.0.1}"
+
+# ─────────────────────────────────────────
 # COLORS
 # ─────────────────────────────────────────
 RST='\033[0m'; BOLD='\033[1m'
@@ -1533,6 +1539,28 @@ EOF
             print_warning "Server will likely fail to connect to the database."
             print_info "Check $SERVER_DIR/etc/mangosd.conf before starting."
         fi
+
+        # ── Dad-mode rates: 2x XP/drops/skills for casual play ──────
+        # Cuts leveling from ~200 hours to ~100 hours without outleveling
+        # quest chains. Reduces farming tedium across the board.
+        sed -i "s|^Rate\.XP\.Kill .*|Rate.XP.Kill    = 2|" "$SERVER_DIR/etc/mangosd.conf"
+        sed -i "s|^Rate\.XP\.Quest .*|Rate.XP.Quest   = 2|" "$SERVER_DIR/etc/mangosd.conf"
+        sed -i "s|^Rate\.XP\.Explore .*|Rate.XP.Explore = 2|" "$SERVER_DIR/etc/mangosd.conf"
+        sed -i "s|^Rate\.Pet\.XP\.Kill .*|Rate.Pet.XP.Kill = 2|" "$SERVER_DIR/etc/mangosd.conf"
+        sed -i "s|^Rate\.Rest\.InGame .*|Rate.Rest.InGame = 2|" "$SERVER_DIR/etc/mangosd.conf"
+        sed -i "s|^Rate\.Rest\.Offline\.InTavernOrCity .*|Rate.Rest.Offline.InTavernOrCity = 4|" "$SERVER_DIR/etc/mangosd.conf"
+        sed -i "s|^Rate\.Rest\.Offline\.InWilderness .*|Rate.Rest.Offline.InWilderness = 2|" "$SERVER_DIR/etc/mangosd.conf"
+        sed -i "s|^Rate\.Drop\.Item\.Uncommon .*|Rate.Drop.Item.Uncommon = 2|" "$SERVER_DIR/etc/mangosd.conf"
+        sed -i "s|^Rate\.Drop\.Item\.Rare .*|Rate.Drop.Item.Rare = 1.5|" "$SERVER_DIR/etc/mangosd.conf"
+        sed -i "s|^Rate\.Drop\.Item\.Quest .*|Rate.Drop.Item.Quest = 2|" "$SERVER_DIR/etc/mangosd.conf"
+        sed -i "s|^Rate\.Drop\.Money .*|Rate.Drop.Money = 2|" "$SERVER_DIR/etc/mangosd.conf"
+        sed -i "s|^Rate\.Honor .*|Rate.Honor = 2|" "$SERVER_DIR/etc/mangosd.conf"
+        sed -i "s|^Rate\.Mining\.Amount .*|Rate.Mining.Amount = 2|" "$SERVER_DIR/etc/mangosd.conf"
+        sed -i "s|^Rate\.Reputation\.Gain .*|Rate.Reputation.Gain = 2|" "$SERVER_DIR/etc/mangosd.conf"
+        sed -i "s|^SkillGain\.Crafting .*|SkillGain.Crafting = 2|" "$SERVER_DIR/etc/mangosd.conf"
+        sed -i "s|^SkillGain\.Gathering .*|SkillGain.Gathering = 2|" "$SERVER_DIR/etc/mangosd.conf"
+        sed -i "s|^SkillGain\.Weapon .*|SkillGain.Weapon = 2|" "$SERVER_DIR/etc/mangosd.conf"
+        print_success "mangosd.conf dad-mode rates applied (2x XP/drops/skills/rep)"
     else
         print_error "mangosd.conf not extracted from image!"
         exit 1
@@ -1552,13 +1580,25 @@ EOF
             "$SERVER_DIR/etc/aiplayerbot.conf"
         sed -i "s|^AiPlayerbot\.RandomBotAccountCount .*|AiPlayerbot.RandomBotAccountCount = 200|" \
             "$SERVER_DIR/etc/aiplayerbot.conf"
-        sed -i "s|^#\? *AiPlayerbot\.SyncLevelWithPlayers .*|AiPlayerbot.SyncLevelWithPlayers = 1|" \
+        # Bots spawn at level 1 and level up naturally (no pre-leveled bots)
+        sed -i "s|^AiPlayerbot\.RandomBotMinLevel .*|AiPlayerbot.RandomBotMinLevel = 1|" \
             "$SERVER_DIR/etc/aiplayerbot.conf"
-        sed -i "s|^#\? *AiPlayerbot\.SyncLevelMaxAbove .*|AiPlayerbot.SyncLevelMaxAbove = 5|" \
+        sed -i "s|^AiPlayerbot\.RandomBotMaxLevel .*|AiPlayerbot.RandomBotMaxLevel = 1|" \
             "$SERVER_DIR/etc/aiplayerbot.conf"
-        sed -i "s|^#\? *AiPlayerbot\.SyncLevelNoPlayer .*|AiPlayerbot.SyncLevelNoPlayer = 1|" \
+        sed -i "s|^#\? *AiPlayerbot\.RandomBotMaxLevelChance .*|AiPlayerbot.RandomBotMaxLevelChance = 0.0|" \
             "$SERVER_DIR/etc/aiplayerbot.conf"
-        print_success "aiplayerbot.conf patched (600-800 bots, 200 accounts, level-synced to player+5)"
+        # Shorter LLM responses and reduce broadcast spam
+        sed -i "s|Keep responses under 100 characters\.|Keep responses under 40 characters. Be terse.|" \
+            "$SERVER_DIR/etc/aiplayerbot.conf"
+        sed -i '/^# AiPlayerbot\.BroadcastToSayGlobalChance/a AiPlayerbot.BroadcastToSayGlobalChance = 3000' \
+            "$SERVER_DIR/etc/aiplayerbot.conf"
+        sed -i '/^# AiPlayerbot\.BroadcastToYellGlobalChance/a AiPlayerbot.BroadcastToYellGlobalChance = 1000' \
+            "$SERVER_DIR/etc/aiplayerbot.conf"
+        sed -i '/^# AiPlayerbot\.BroadcastToGeneralGlobalChance/a AiPlayerbot.BroadcastToGeneralGlobalChance = 3000' \
+            "$SERVER_DIR/etc/aiplayerbot.conf"
+        sed -i '/^# AiPlayerbot\.BroadcastToWorldGlobalChance/a AiPlayerbot.BroadcastToWorldGlobalChance = 3000' \
+            "$SERVER_DIR/etc/aiplayerbot.conf"
+        print_success "aiplayerbot.conf patched (600-800 bots, level 1 start, quiet chat)"
     fi
 
     # ── AHBot: high-volume auction house (~15k items target) ─────────
@@ -1901,6 +1941,50 @@ EOF
         ' 2>&1 | tail -2
     print_success "Playerbots SQL imported"
 
+    # ── Dad-mode mounts: fix trainers to vanilla spells + scale prices ──
+    # TBC "Apprentice/Journeyman Riding" spells don't work in the 1.12.1 client.
+    # Replace with vanilla race-specific riding spells, set cost to 1g, level 10.
+    print_info "Applying dad-mode mount fixes..."
+    $DOCKER_CMD exec -i -e MYSQL_PWD="${DB_PASSWORD}" vanilla-db \
+        mariadb -u root mangos <<'MOUNTSQL'
+-- Fix riding trainers: replace TBC spells with vanilla race-specific riding
+UPDATE npc_trainer SET spell = 10921 WHERE entry IN (4773, 7743) AND spell = 33389;
+UPDATE npc_trainer SET spell = 824   WHERE entry IN (4732, 5026) AND spell = 33389;
+UPDATE npc_trainer SET spell = 825   WHERE entry IN (4752, 5031) AND spell = 33389;
+UPDATE npc_trainer SET spell = 826   WHERE entry IN (4772, 5028) AND spell = 33389;
+UPDATE npc_trainer SET spell = 828   WHERE entry IN (4753, 5030) AND spell = 33389;
+UPDATE npc_trainer SET spell = 18995 WHERE entry = 3690 AND spell = 33389;
+UPDATE npc_trainer SET spell = 10861 WHERE entry IN (7953, 7745) AND spell = 33389;
+UPDATE npc_trainer SET spell = 10907 WHERE entry = 7746 AND spell = 33389;
+-- Remove TBC Journeyman Riding (epic mounts don't need separate skill in vanilla)
+DELETE FROM npc_trainer WHERE spell = 33392;
+-- Set riding training cost to 1g
+UPDATE npc_trainer SET spellcost = 10000, reqlevel = 10
+WHERE spell IN (824, 825, 826, 828, 10861, 10907, 10921, 18995);
+-- Remove TBC Riding skill gate from mount items (level requirement is enough)
+UPDATE item_template SET RequiredSkill = 0, RequiredSkillRank = 0
+WHERE RequiredSkill = 762;
+-- Fix vanilla riding spells to grant Riding skill 762 (what mount spells check for)
+UPDATE spell_template SET EffectMiscValue2 = 762
+WHERE Id IN (824, 825, 826, 828, 10861, 10907, 10921, 18995)
+AND Effect2 IN (44, 118);
+-- Mount item prices: 1g normal, 10g epic
+UPDATE item_template SET BuyPrice = 10000
+WHERE BuyPrice = 100000 AND RequiredLevel = 10;
+UPDATE item_template SET BuyPrice = 100000
+WHERE BuyPrice = 1000000 AND RequiredLevel = 30;
+UPDATE item_template SET BuyPrice = 100000
+WHERE entry IN (15292, 15293) AND BuyPrice = 10000000;
+MOUNTSQL
+    print_success "Mount trainers fixed (vanilla spells) + prices scaled (2g normal, 10g epic)"
+
+    # ── Dad-mode: set realm address to LAN IP so other devices can connect ──
+    print_info "Setting realm address to ${LAN_IP} (LAN access)..."
+    $DOCKER_CMD exec -i -e MYSQL_PWD="${DB_PASSWORD}" vanilla-db \
+        mariadb -u root realmd -e \
+        "UPDATE realmlist SET address = '${LAN_IP}' WHERE id = 1;"
+    print_success "Realm address set to ${LAN_IP}"
+
     # ────────────────────────────────────────────────────────────────
     # Phase 9: Verify the install — count critical tables
     # ────────────────────────────────────────────────────────────────
@@ -2139,7 +2223,7 @@ if [ \$MANUAL_SHUTDOWN -eq 0 ]; then
         echo -e "${GREEN}${BOLD}  ✅ AZEROTH IS READY!${NC}"
         printf "${GOLD}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}\n"
         echo ""
-        echo -e "  ${DIM}Login: player / player  •  Realmlist: 127.0.0.1${NC}"
+        echo -e "  ${DIM}Login: player / player  •  Realmlist: ${LAN_IP}${NC}"
         echo ""
     else
         echo -e "  ${YELLOW}⏳ Server still warming up. Check logs if needed.${NC}"
@@ -2209,9 +2293,9 @@ LAUNCHER
 
 SERVER:
   Folder:    ${SERVER_DIR}
-  Realmlist: 127.0.0.1
-  World:     127.0.0.1:8085
-  Login:     127.0.0.1:3724
+  Realmlist: ${LAN_IP}
+  World:     ${LAN_IP}:8085
+  Login:     ${LAN_IP}:3724
   Account:   player / player
 
 LAUNCHER:
@@ -2223,7 +2307,7 @@ LAUNCHER:
 
 REALMLIST (in your Vanilla client folder):
   Edit:  realmlist.wtf
-  Set to: set realmlist 127.0.0.1
+  Set to: set realmlist ${LAN_IP}
   Then lock: chmod 444 [path]/realmlist.wtf
 
 USEFUL COMMANDS:
@@ -2268,7 +2352,7 @@ show_completion() {
     if [ -e "$realmlist_path" ] || [ -d "$(dirname "$realmlist_path")" ]; then
         # Unlock first in case it was already chmod 444
         chmod 644 "$realmlist_path" 2>/dev/null || true
-        echo "set realmlist 127.0.0.1" > "$realmlist_path" 2>/dev/null && {
+        echo "set realmlist ${LAN_IP}" > "$realmlist_path" 2>/dev/null && {
             chmod 444 "$realmlist_path" 2>/dev/null
             realmlist_written=1
         }
@@ -2289,7 +2373,7 @@ show_completion() {
     echo -e "  ${WHITE}${BOLD}Bots:${NC}       ${GREEN}Playerbots + AHBot active${NC}"
     echo -e "  ${WHITE}${BOLD}Account:${NC}    ${YELLOW}player / player${NC} (create in step A below)"
     if [ $realmlist_written -eq 1 ]; then
-        echo -e "  ${WHITE}${BOLD}Realmlist:${NC}  ${GREEN}auto-configured (locked to 127.0.0.1)${NC}"
+        echo -e "  ${WHITE}${BOLD}Realmlist:${NC}  ${GREEN}auto-configured (locked to ${LAN_IP})${NC}"
     else
         echo -e "  ${WHITE}${BOLD}Realmlist:${NC}  ${YELLOW}NOT auto-written — see step A below${NC}"
     fi
@@ -2323,7 +2407,7 @@ show_completion() {
     if [ $realmlist_written -ne 1 ]; then
         echo -e "${WHITE}${BOLD}B. Set up realmlist (auto-write failed):${NC}"
         echo -e "   Edit ${CL}$realmlist_path${NC}"
-        echo -e "   Contents: ${CL}set realmlist 127.0.0.1${NC}"
+        echo -e "   Contents: ${CL}set realmlist ${LAN_IP}${NC}"
         echo -e "   Lock it:  ${CL}chmod 444 $realmlist_path${NC}"
         echo ""
     fi

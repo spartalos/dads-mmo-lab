@@ -1,0 +1,170 @@
+diff --git a/playerbot/strategy/actions/SayAction.cpp b/playerbot/strategy/actions/SayAction.cpp
+index 7960b00..101804a 100644
+--- a/playerbot/strategy/actions/SayAction.cpp
++++ b/playerbot/strategy/actions/SayAction.cpp
+@@ -163,6 +163,165 @@ void ChatReplyAction::GetAIChatPlaceholders(std::map<std::string, std::string>&
+         placeholders["<" + preFix + " type>"] = "player";
+         placeholders["<" + preFix + " subname>"] = "";
+         placeholders["<" + preFix + " gossip>"] = "";
++
++        Player* player = (Player*)unit;
++
++        // Health
++        placeholders["<" + preFix + " health>"] = std::to_string((int)unit->GetHealthPercent()) + "%";
++
++        // Power (mana/rage/energy)
++        {
++            Powers powerType = unit->GetPowerType();
++            std::string powerStr;
++            if (powerType == POWER_MANA)
++            {
++                uint32 maxMana = unit->GetMaxPower(POWER_MANA);
++                if (maxMana > 0)
++                    powerStr = std::to_string((int)((float)unit->GetPower(POWER_MANA) / maxMana * 100)) + "% mana";
++                else
++                    powerStr = "0% mana";
++            }
++            else if (powerType == POWER_RAGE)
++            {
++                powerStr = std::to_string((int)(unit->GetPower(POWER_RAGE) / 10)) + " rage";
++            }
++            else if (powerType == POWER_ENERGY)
++            {
++                powerStr = std::to_string((int)unit->GetPower(POWER_ENERGY)) + " energy";
++            }
++            else
++            {
++                powerStr = "none";
++            }
++            placeholders["<" + preFix + " power>"] = powerStr;
++        }
++
++        // Combat state
++        placeholders["<" + preFix + " combat>"] = unit->IsInCombat() ? "in combat" : "not in combat";
++
++        // Gold
++        placeholders["<" + preFix + " gold>"] = ChatHelper::formatMoney(player->GetMoney());
++
++        // Spec-based role
++        {
++            int specTab = AiFactory::GetPlayerSpecTab(player);
++            std::string roleName = ChatHelper::specs[player->getClass()][specTab] + " " + ChatHelper::formatClass(player->getClass());
++            placeholders["<" + preFix + " role>"] = roleName;
++        }
++
++        // Equipped gear summary
++        {
++            std::string gearStr;
++            for (int i = EQUIPMENT_SLOT_START; i < EQUIPMENT_SLOT_END; ++i)
++            {
++                if (i == EQUIPMENT_SLOT_BODY || i == EQUIPMENT_SLOT_TABARD)
++                    continue;
++                Item* item = player->GetItemByPos(INVENTORY_SLOT_BAG_0, i);
++                if (item)
++                {
++                    if (!gearStr.empty()) gearStr += ", ";
++                    gearStr += item->GetProto()->Name1;
++                }
++            }
++            if (gearStr.empty()) gearStr = "no gear";
++            placeholders["<" + preFix + " gear>"] = gearStr;
++        }
++
++        // Bag space
++        {
++            uint32 totalFree = 0, totalSlots = 16;
++            for (uint8 slot = INVENTORY_SLOT_ITEM_START; slot < INVENTORY_SLOT_ITEM_END; slot++)
++            {
++                if (!player->GetItemByPos(INVENTORY_SLOT_BAG_0, slot))
++                    totalFree++;
++            }
++            for (uint8 bag = INVENTORY_SLOT_BAG_START; bag < INVENTORY_SLOT_BAG_END; ++bag)
++            {
++                const Bag* pBag = (Bag*)player->GetItemByPos(INVENTORY_SLOT_BAG_0, bag);
++                if (pBag && pBag->GetProto()->Class == ITEM_CLASS_CONTAINER && pBag->GetProto()->SubClass == ITEM_SUBCLASS_CONTAINER)
++                {
++                    totalSlots += pBag->GetBagSize();
++                    totalFree += pBag->GetFreeSlots();
++                }
++            }
++            placeholders["<" + preFix + " bags>"] = std::to_string(totalFree) + "/" + std::to_string(totalSlots) + " free bag slots";
++        }
++
++        // Active quests
++        {
++            std::string questStr;
++            for (uint16 slot = 0; slot < MAX_QUEST_LOG_SIZE; ++slot)
++            {
++                uint32 questId = player->GetQuestSlotQuestId(slot);
++                if (!questId) continue;
++                QuestStatus status = player->GetQuestStatus(questId);
++                if (status == QUEST_STATUS_INCOMPLETE || status == QUEST_STATUS_COMPLETE)
++                {
++                    Quest const* quest = sObjectMgr.GetQuestTemplate(questId);
++                    if (quest)
++                    {
++                        if (!questStr.empty()) questStr += ", ";
++                        questStr += quest->GetTitle();
++                    }
++                }
++            }
++            if (questStr.empty()) questStr = "no active quests";
++            placeholders["<" + preFix + " quests>"] = questStr;
++        }
++
++        // Nearby attackers (bot-only)
++        {
++            PlayerbotAI* botAI = player->GetPlayerbotAI();
++            if (botAI)
++            {
++                AiObjectContext* context = botAI->GetAiObjectContext();
++                std::list<ObjectGuid> attackers = context->GetValue<std::list<ObjectGuid>>("attackers")->Get();
++                if (attackers.empty())
++                {
++                    placeholders["<" + preFix + " attackers>"] = "no attackers";
++                }
++                else
++                {
++                    std::string attackerStr = std::to_string(attackers.size()) + " attacker(s): ";
++                    int count = 0;
++                    for (auto& guid : attackers)
++                    {
++                        Unit* attacker = botAI->GetUnit(guid);
++                        if (attacker && count < 3)
++                        {
++                            if (count > 0) attackerStr += ", ";
++                            attackerStr += attacker->GetName();
++                            count++;
++                        }
++                    }
++                    if ((int)attackers.size() > 3)
++                        attackerStr += " and others";
++                    placeholders["<" + preFix + " attackers>"] = attackerStr;
++                }
++            }
++            else
++            {
++                placeholders["<" + preFix + " attackers>"] = "";
++            }
++        }
++
++        // Active buffs (positive auras, capped at 10)
++        {
++            std::string buffStr;
++            int buffCount = 0;
++            for (auto& itr : unit->GetSpellAuraHolderMap())
++            {
++                SpellEntry const* spell = itr.second->GetSpellProto();
++                if (spell && spell->SpellName[0] && strlen(spell->SpellName[0]) > 0 && IsPositiveSpell(spell->Id) && buffCount < 10)
++                {
++                    if (!buffStr.empty()) buffStr += ", ";
++                    buffStr += spell->SpellName[0];
++                    buffCount++;
++                }
++            }
++            if (buffStr.empty()) buffStr = "no buffs";
++            placeholders["<" + preFix + " buffs>"] = buffStr;
++        }
+     }
+     if (unit->IsCreature())
+     {
